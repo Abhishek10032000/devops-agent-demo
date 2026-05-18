@@ -1,0 +1,229 @@
+# =============================================================================
+# CI/CD Pipeline — Items Service
+# Triggers on push to main and pull requests.
+# Three stages: Build → Test → Deploy (with environment promotion)
+#
+# DEMO NOTE: This workflow demonstrates three failure scenarios for the
+# AWS DevOps Agent blog post:
+#   1. Build failure: dependency conflict when aws-xray-sdk-core is added
+#   2. Test failure: flaky integration test (timing-dependent)
+#   3. Deploy failure: KMS key policy drift causes CDK deploy to fail
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write   # Required for OIDC federation with AWS
+  contents: read
+  actions: read
+  checks: write      # For test result annotations
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: items-service
+  NODE_VERSION: '20'
+
+jobs:
+  # ===========================================================================
+  # BUILD — Compile, lint, build Docker image, push to ECR
+  # ===========================================================================
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build-push.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # SCENARIO 1: This step fails if package.json has conflicting deps
+      # The DevOps Agent reads the npm ci error log, identifies the ERESOLVE
+      # conflict, and uses GitHub MCP to inspect package.json for resolution.
+      - name: Install dependencies
+        run: npm ci --strict-peer-deps
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+          retention-days: 5
+
+  # ===========================================================================
+  # TEST — Unit + integration tests with coverage reporting
+  # ===========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit -- --ci --reporters=default --reporters=jest-junit
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ./test-results/unit
+
+      # SCENARIO 2: The integration test suite contains a flaky test that
+      # intermittently fails due to timing sensitivity. When it fails, the
+      # DevOps Agent identifies it as flaky (non-deterministic), examines
+      # test history via GitHub MCP, and suggests quarantining or adding retries.
+      - name: Run integration tests
+        run: npm run test:integration -- --ci --reporters=default --reporters=jest-junit
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ./test-results/integration
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+
+      - name: Coverage gate
+        run: |
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "Line coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # DEPLOY — CDK deploy with environment promotion (dev → staging → prod)
+  # ===========================================================================
+  deploy:
+    name: Deploy (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    strategy:
+      max-parallel: 1
+      matrix:
+        environment: [dev, staging, prod]
+    environment:
+      name: ${{ matrix.environment }}
+      # Prod requires manual approval via GitHub Environments
+      url: https://${{ matrix.environment }}.items-service.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole-${{ matrix.environment }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # SCENARIO 3: CDK deploy fails when the KMS key policy has drifted.
+      # The actual error is: "AccessDeniedException: The ciphertext refers to a
+      # customer master key that does not exist, does not exist in this region,
+      # or you are not allowed to access."
+      # The DevOps Agent detects the KMS policy drift, uses GitHub MCP to check
+      # the CDK stack definition, compares with the actual AWS resource state,
+      # and recommends re-aligning the key policy.
+      - name: CDK Deploy
+        working-directory: infra
+        run: |
+          npx cdk deploy --all \
+            --require-approval never \
+            --context environment=${{ matrix.environment }} \
+            --context imageTag=${{ needs.build.outputs.image-tag }} \
+            --outputs-file cdk-outputs.json
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+
+      - name: Smoke test
+        run: |
+          ENDPOINT=$(cat infra/cdk-outputs.json | jq -r '.[].AlbEndpoint')
+          echo "Testing endpoint: ${ENDPOINT}"
+          curl -sf "${ENDPOINT}/health" || exit 1
+
+      - name: Upload CDK outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-${{ matrix.environment }}
+          path: infra/cdk-outputs.json

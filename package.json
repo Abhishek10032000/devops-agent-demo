@@ -1,0 +1,63 @@
+{
+  "name": "@demo/items-service",
+  "version": "1.0.0",
+  "description": "Demo Node.js microservice for AWS DevOps Agent blog post — deployed to ECS Fargate via CDK",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "test": "jest --coverage",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "docker:build": "docker build -t items-service .",
+    "docker:run": "docker-compose up",
+    "cdk:deploy": "cd infra && npx cdk deploy --all --require-approval never"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "@aws-sdk/client-secrets-manager": "^3.525.0",
+    "@aws-sdk/client-kms": "^3.525.0",
+    "zod": "^3.22.4",
+    "pino": "^8.19.0",
+    "pino-http": "^9.0.0",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/uuid": "^9.0.8",
+    "@types/node": "^20.11.19",
+    "@types/jest": "^29.5.12",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "supertest": "^6.3.4",
+    "@types/supertest": "^6.0.2",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.2",
+    "@typescript-eslint/parser": "^7.0.2",
+    "eslint-config-prettier": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "_DEMO_NOTES": {
+    "SCENARIO_1_BUILD_FAILURE": [
+      "To simulate a build failure (dependency conflict), add the following to dependencies:",
+      "  \"aws-xray-sdk-core\": \"^3.6.0\"",
+      "This package pins @aws-sdk/client-kms@3.400.0 internally, conflicting with our",
+      "direct @aws-sdk/client-kms@^3.525.0 dependency. npm ci with --strict-peer-deps",
+      "will fail with: ERESOLVE unable to resolve dependency tree.",
+      "",
+      "The DevOps Agent detects this in the CI logs, opens the GitHub MCP Server to read",
+      "package.json, identifies the version mismatch, and suggests pinning both to a",
+      "compatible range or using overrides."
+    ]
+  }
+}

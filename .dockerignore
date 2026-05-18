@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.git
+.github
+*.md
+.env*
+docker-compose.yml
+infra
+tests
+.eslintrc.js
+jest.config.ts

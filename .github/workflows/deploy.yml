@@ -1,0 +1,110 @@
+# =============================================================================
+# Reusable Deployment Workflow
+# Called by ci.yml or triggered manually for hotfix deploys
+# =============================================================================
+
+name: Deploy (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: 'Target environment (dev, staging, prod)'
+      image-tag:
+        required: true
+        type: string
+        description: 'Docker image tag to deploy'
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options: [dev, staging, prod]
+        description: 'Target environment'
+      image-tag:
+        required: true
+        type: string
+        description: 'Docker image tag to deploy'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole-${{ inputs.environment }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Diff (preview changes)
+        working-directory: infra
+        run: |
+          npx cdk diff --all \
+            --context environment=${{ inputs.environment }} \
+            --context imageTag=${{ inputs.image-tag }}
+
+      - name: CDK Deploy
+        working-directory: infra
+        run: |
+          npx cdk deploy --all \
+            --require-approval never \
+            --context environment=${{ inputs.environment }} \
+            --context imageTag=${{ inputs.image-tag }} \
+            --outputs-file cdk-outputs.json
+
+      - name: Post-deployment validation
+        run: |
+          ENDPOINT=$(cat infra/cdk-outputs.json | jq -r '.[].AlbEndpoint')
+          echo "🔍 Running post-deployment checks against: ${ENDPOINT}"
+          
+          # Health check
+          echo "→ Health check..."
+          curl -sf "${ENDPOINT}/health" | jq .
+          
+          # Basic API smoke test
+          echo "→ API smoke test..."
+          RESPONSE=$(curl -sf -w "\n%{http_code}" "${ENDPOINT}/api/v1/items")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Smoke test failed with HTTP ${HTTP_CODE}"
+            exit 1
+          fi
+          
+          echo "✅ Deployment validated successfully"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deployment to ${{ inputs.environment }} failed!"
+          echo "The DevOps Agent will analyze this failure and suggest remediation."
