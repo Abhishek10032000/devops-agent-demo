@@ -72,7 +72,7 @@ export class SecretsStack extends cdk.Stack {
             effect: iam.Effect.ALLOW,
             principals: [
               new iam.ArnPrincipal(
-                `arn:aws:iam::${accountId}:role/GitHubActionsRole-${props.environment}`
+                `arn:aws:iam::${accountId}:role/GitHubActionsRole`
               ),
             ],
             actions: [
@@ -100,9 +100,7 @@ export class SecretsStack extends cdk.Stack {
             sid: 'AllowEcsTaskRoleDecrypt',
             effect: iam.Effect.ALLOW,
             principals: [
-              new iam.ArnPrincipal(
-                `arn:aws:iam::${accountId}:role/items-service-${props.environment}-task-role`
-              ),
+              new iam.AccountRootPrincipal(),
             ],
             actions: [
               'kms:Decrypt',
