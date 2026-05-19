@@ -194,6 +194,11 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Bootstrap CDK
+        working-directory: infra
+        run: |
+          npx cdk bootstrap aws://${{ vars.AWS_ACCOUNT_ID }}/us-east-1
+
       - name: CDK Deploy
         working-directory: infra
         run: |
