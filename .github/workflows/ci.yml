@@ -160,21 +160,16 @@ jobs:
           fi
 
   # ===========================================================================
-  # DEPLOY — CDK deploy with environment promotion (dev → staging → prod)
+  # DEPLOY — CDK deploying to dev environment on push to main
   # ===========================================================================
   deploy:
-    name: Deploy (${{ matrix.environment }})
+    name: Deploy
     runs-on: ubuntu-latest
     needs: [build, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    strategy:
-      max-parallel: 1
-      matrix:
-        environment: [dev, staging, prod]
     environment:
-      name: ${{ matrix.environment }}
-      # Prod requires manual approval via GitHub Environments
-      url: https://${{ matrix.environment }}.items-service.example.com
+      name: dev
+      url: https://dev.items-service.example.com
 
     steps:
       - name: Checkout code
@@ -199,32 +194,17 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      # SCENARIO 3: CDK deploy fails when the KMS key policy has drifted.
-      # The actual error is: "AccessDeniedException: The ciphertext refers to a
-      # customer master key that does not exist, does not exist in this region,
-      # or you are not allowed to access."
-      # The DevOps Agent detects the KMS policy drift, uses GitHub MCP to check
-      # the CDK stack definition, compares with the actual AWS resource state,
-      # and recommends re-aligning the key policy.
       - name: CDK Deploy
         working-directory: infra
         run: |
           npx cdk deploy --all \
             --require-approval never \
-            --context environment=${{ matrix.environment }} \
+            --context environment=dev \
             --context imageTag=${{ needs.build.outputs.image-tag }} \
             --outputs-file cdk-outputs.json
-        env:
-          ENVIRONMENT: ${{ matrix.environment }}
 
       - name: Smoke test
         run: |
           ENDPOINT=$(cat infra/cdk-outputs.json | jq -r '.[].AlbEndpoint')
           echo "Testing endpoint: ${ENDPOINT}"
           curl -sf "${ENDPOINT}/health" || exit 1
-
-      - name: Upload CDK outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: cdk-outputs-${{ matrix.environment }}
-          path: infra/cdk-outputs.json
