@@ -25,7 +25,6 @@ const config: Config = {
   },
   // Increase timeout for integration tests that hit external services
   testTimeout: 15000,
-  setupFilesAfterFramework: [],
   verbose: true,
 };
 
