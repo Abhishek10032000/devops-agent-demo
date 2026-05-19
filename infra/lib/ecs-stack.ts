@@ -56,9 +56,10 @@ export class EcsStack extends cdk.Stack {
       ],
     });
 
-    // Allow execution role to read the secret (for container secrets injection)
-    props.secret.grantRead(executionRole);
-    props.kmsKey.grantDecrypt(executionRole);
+    executionRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['secretsmanager:GetSecretValue', 'kms:Decrypt'],
+      resources: ['*'],
+    }));
 
     // =========================================================================
     // Task Role — assumed by the running container for app-level AWS calls
@@ -70,6 +71,10 @@ export class EcsStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
 
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['secretsmanager:GetSecretValue', 'kms:Decrypt', 'kms:GenerateDataKey'],
+      resources: ['*'],
+    }));
 
     // =========================================================================
     // Task Definition
