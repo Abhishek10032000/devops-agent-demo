@@ -70,9 +70,6 @@ export class EcsStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
 
-    // Grant the task role permission to read secrets and decrypt
-    props.secret.grantRead(taskRole);
-    props.kmsKey.grantDecrypt(taskRole);
 
     // =========================================================================
     // Task Definition
