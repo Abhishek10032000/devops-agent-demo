@@ -205,7 +205,7 @@ jobs:
           npx cdk deploy --all \
             --require-approval never \
             --context environment=dev \
-            --context imageTag=${{ needs.build.outputs.image-tag }} \
+            --context imageTag=latest \
             --outputs-file cdk-outputs.json
 
       - name: Smoke test
