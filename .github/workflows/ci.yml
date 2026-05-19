@@ -210,6 +210,6 @@ jobs:
 
       - name: Smoke test
         run: |
-          ENDPOINT=$(cat infra/cdk-outputs.json | jq -r '.[].AlbEndpoint')
+          ENDPOINT=$(cat infra/cdk-outputs.json | jq -r 'to_entries[].value | to_entries[] | select(.key | contains("AlbEndpoint")) | .value')
           echo "Testing endpoint: ${ENDPOINT}"
-          curl -sf "${ENDPOINT}/health" || exit 1
+          curl -sf "${ENDPOINT}/health" --max-time 10 || exit 1
