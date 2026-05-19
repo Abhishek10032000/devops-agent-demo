@@ -78,6 +78,13 @@ export async function loadConfig(): Promise<AppConfig> {
     }
 
     const raw = JSON.parse(response.SecretString) as Record<string, unknown>;
+
+    // Secrets Manager stores generateStringKey as a flat top-level key
+    // Merge it into the nested database object
+    if (raw['database.password'] && typeof raw.database === 'object' && raw.database !== null) {
+      (raw.database as Record<string, unknown>).password = raw['database.password'];
+    }
+
     _config = ConfigSchema.parse(raw);
   } else {
     // Development fallback: use environment variables
