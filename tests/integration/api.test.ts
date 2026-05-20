@@ -239,7 +239,7 @@ describe('Items API Integration Tests', () => {
 
       // This comparison fails when both items get the same createdAt timestamp
       expect(new Date(firstItem.createdAt).getTime())
-        .toBeGreaterThanOrEqual(new Date(lastItem.createdAt).getTime());
+        .toBeGreaterThan(new Date(lastItem.createdAt).getTime());
     });
   });
 });
