@@ -55,7 +55,7 @@ let _config: AppConfig | null = null;
 export async function loadConfig(): Promise<AppConfig> {
   if (_config) return _config;
 
-  const secretName = process.env.SECRET_NAME;
+  const secretName = 'dev/items-service/config-v2';
   const environment = process.env.NODE_ENV || 'development';
 
   if (secretName && environment !== 'development') {
