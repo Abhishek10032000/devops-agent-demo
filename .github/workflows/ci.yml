@@ -200,10 +200,11 @@ jobs:
       - name: CDK Deploy
         working-directory: infra
         run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           npx cdk deploy --all \
             --require-approval never \
             --context environment=dev \
-            --context imageTag=latest \
+            --context imageTag=main-${SHORT_SHA} \
             --outputs-file cdk-outputs.json
 
       - name: Smoke test
