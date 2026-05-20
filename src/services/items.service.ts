@@ -107,6 +107,7 @@ export class ItemsService {
       ...input,
       createdAt: now,
       updatedAt: now,
+      invalidField: 123,
     };
 
     this.items.set(item.id, item);
