@@ -18,7 +18,6 @@
   "dependencies": {
     "@aws-sdk/client-kms": "^3.525.0",
     "@aws-sdk/client-secrets-manager": "^3.525.0",
-    "aws-xray-sdk-core": "^3.6.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
