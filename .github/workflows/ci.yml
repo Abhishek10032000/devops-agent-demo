@@ -225,15 +225,13 @@ jobs:
       - name: Trigger Investigation
         env:
           WEBHOOK_URL: ${{ secrets.DEVOPS_AGENT_WEBHOOK_URL }}
-          WEBHOOK_SECRET: ${{ secrets.DEVOPS_AGENT_WEBHOOK_SECRET }}
+          WEBHOOK_SECRET=[REDACTED_PASSWORD] secrets.DEVOPS_AGENT_WEBHOOK_SECRET }}
         run: |
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          PAYLOAD="{\"eventType\":\"incident\",\"incidentId\":\"gha-${{ github.run_id }}\",\"action\":\"created\",\"priority\":\"HIGH\",\"title\":\"CI/CD Pipeline Failed: ${{ github.workflow }}\",\"description\":\"Workflow ${{ github.workflow }} failed on branch ${{ github.ref_name }} (run #${{ github.run_number }}). Commit: ${{ github.sha }}. See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",\"timestamp\":\"${TIMESTAMP}\",\"service\":\"items-service\",\"data\":{\"repository\":\"${{ github.repository }}\",\"run_id\":\"${{ github.run_id }}\",\"run_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",\"branch\":\"${{ github.ref_name }}\",\"commit_sha\":\"${{ github.sha }}\"}}"
 
-          SIGNATURE=$(echo -n "${TIMESTAMP}:${PAYLOAD}" | openssl dgst -sha256 -hmac "${WEBHOOK_SECRET}" -binary | base64)
+          PAYLOAD='{"eventType":"incident","incidentId":"gha-${{ github.run_id }}","action":"created","priority":"HIGH","title":"CI/CD Pipeline Failed: ${{ github.workflow }}","description":"Workflow ${{ github.workflow }} failed on branch ${{ github.ref_name }} (run #${{ github.run_number }}).","timestamp":"'"${TIMESTAMP}"'","service":"items-service","data":{"repository":"${{ github.repository }}","run_id":"${{ github.run_id }}","run_url":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","branch":"${{ github.ref_name }}","commit_sha":"${{ github.sha }}"}}'
 
-          echo "Timestamp: ${TIMESTAMP}"
-          echo "Payload length: ${#PAYLOAD}"
+          SIGNATURE=$(printf '%s' "${TIMESTAMP}:${PAYLOAD}" | openssl dgst -sha256 -hmac "${WEBHOOK_SECRET}" -binary | base64)
 
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST "${WEBHOOK_URL}" \
             -H "Content-Type: application/json" \
