@@ -18,6 +18,7 @@ export interface Item {
   metadata?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+  trackingId?: string;
 }
 
 export interface CreateItemInput {
