@@ -18,7 +18,6 @@ export interface Item {
   metadata?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
-  trackingId?: string;
 }
 
 export interface CreateItemInput {
@@ -108,7 +107,6 @@ export class ItemsService {
       ...input,
       createdAt: now,
       updatedAt: now,
-      trackingId: `TRK-${Date.now()}`,
     };
 
     this.items.set(item.id, item);
