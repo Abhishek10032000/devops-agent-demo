@@ -216,7 +216,7 @@ jobs:
   # ===========================================================================
   # NOTIFY — Trigger DevOps Agent investigation on failure
   # ===========================================================================
-    notify-devops-agent:
+  notify-devops-agent:
     name: Notify DevOps Agent
     runs-on: ubuntu-latest
     needs: [build, test, deploy]
