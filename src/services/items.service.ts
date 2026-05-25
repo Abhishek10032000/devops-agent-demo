@@ -107,6 +107,7 @@ export class ItemsService {
       ...input,
       createdAt: now,
       updatedAt: now,
+      trackingId: `TRK-${Date.now()}`,
     };
 
     this.items.set(item.id, item);

@@ -216,7 +216,7 @@ jobs:
   # ===========================================================================
   # NOTIFY — Trigger DevOps Agent investigation on failure
   # ===========================================================================
-  notify-devops-agent:
+    notify-devops-agent:
     name: Notify DevOps Agent
     runs-on: ubuntu-latest
     needs: [build, test, deploy]
@@ -232,10 +232,22 @@ jobs:
 
           SIGNATURE=$(echo -n "${TIMESTAMP}:${PAYLOAD}" | openssl dgst -sha256 -hmac "${WEBHOOK_SECRET}" -binary | base64)
 
-          curl -sf -X POST "${WEBHOOK_URL}" \
+          echo "Timestamp: ${TIMESTAMP}"
+          echo "Payload length: ${#PAYLOAD}"
+
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST "${WEBHOOK_URL}" \
             -H "Content-Type: application/json" \
             -H "x-amzn-event-timestamp: ${TIMESTAMP}" \
             -H "x-amzn-event-signature: ${SIGNATURE}" \
-            -d "${PAYLOAD}"
+            -d "${PAYLOAD}")
 
-          echo "DevOps Agent investigation triggered"
+          echo "HTTP Response Code: ${HTTP_CODE}"
+          cat /tmp/response.txt
+          echo ""
+
+          if [ "${HTTP_CODE}" -ge 400 ]; then
+            echo "Webhook call failed"
+            exit 1
+          fi
+
+          echo "DevOps Agent investigation triggered successfully"
