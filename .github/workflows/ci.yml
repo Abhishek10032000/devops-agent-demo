@@ -225,7 +225,7 @@ jobs:
       - name: Trigger Investigation
         env:
           WEBHOOK_URL: ${{ secrets.DEVOPS_AGENT_WEBHOOK_URL }}
-          WEBHOOK_SECRET=[REDACTED_PASSWORD] secrets.DEVOPS_AGENT_WEBHOOK_SECRET }}
+          WEBHOOK_SECRET: ${{ secrets.DEVOPS_AGENT_WEBHOOK_SECRET }}
         run: |
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
