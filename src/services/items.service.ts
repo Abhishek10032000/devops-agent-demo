@@ -107,7 +107,6 @@ export class ItemsService {
       ...input,
       createdAt: now,
       updatedAt: now,
-      trackingId: `TRK-${uuidv4().split('-')[0].toUpperCase()}`,
     };
 
     this.items.set(item.id, item);
